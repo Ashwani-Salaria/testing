@@ -1,0 +1,213 @@
+// import 'package:flutter/material.dart';
+
+class Abc with ChangeNotifier {
+  bool loading = false;
+  bool lodeSeeMore;
+  String page;
+  List<TransitionItemModel>? records;
+
+  TransitionItemModel? detailTransitionItemModel;
+
+  Abc({
+    this.records,
+    this.lodeSeeMore = false,
+    this.page = '',
+  });
+
+  final TransitionsService _transitionsService = TransitionsService();
+
+  Future<void> getList(
+      {required TransitionRequest transitionRequest,
+      bool isSearch = false}) async {
+    try {
+      Abc userList =
+          await _transitionsService.getTransactionsServices(transitionRequest);
+
+      loading = true;
+
+      if (userList.records != null && userList.records!.isNotEmpty) {
+        page = userList.page;
+        if (records != null && records!.isNotEmpty && lodeSeeMore == true) {
+          lodeSeeMore = false;
+          records!.addAll(userList.records!);
+          // baseUrl = _userList.baseUrl;
+        } else {
+          records = userList.records;
+          // baseUrl = _userList.baseUrl;
+        }
+      } else {
+        lodeSeeMore = false;
+      }
+
+      notifyListeners();
+    } catch (e) {
+      loading = true;
+      lodeSeeMore = false;
+      notifyListeners();
+    }
+  }
+
+  void loadMoreFun(TransitionRequest transitionRequest) {
+    lodeSeeMore = true;
+    notifyListeners();
+    transitionRequest.page = page;
+    getList(transitionRequest: transitionRequest);
+  }
+
+  Future<void> getDetailList({
+    required TransitionRequest transitionRequest,
+  }) async {
+    try {
+      Map<String, dynamic>? res = await _transitionsService
+          .getDetailTransitionsServices(transitionRequest);
+
+      loading = true;
+
+      if (res != null) {
+        detailTransitionItemModel = TransitionItemModel.fromJson(res);
+      }
+
+      notifyListeners();
+    } catch (e) {
+      loading = true;
+      notifyListeners();
+    }
+  }
+
+  factory Abc.fromJson(Map<String, dynamic> json) {
+    List<TransitionItemModel> list = [];
+    if (json['data'] != null && json['data'].length > 0) {
+      final List dataList = json['data'] as List;
+      list = dataList
+          .map<TransitionItemModel>(
+              (dataObj) => TransitionItemModel.fromJson(dataObj))
+          .toList();
+    }
+
+    return Abc(
+      records: list,
+      page: StringHelpers.convertToString(json['page']),
+    );
+  }
+}
+
+class TransitionItemModel {
+  String transactionID;
+  String date;
+  String amount;
+  bool confirmations;
+  String transactionFee;
+  String transactionType;
+  String transactionStatus;
+  String fromToAddress;
+
+  TransitionItemModel({
+    this.transactionID = '',
+    this.date = '',
+    this.amount = '',
+    this.confirmations = false,
+    this.transactionStatus = '',
+    this.transactionFee = '',
+    this.transactionType = '',
+    this.fromToAddress = '',
+  });
+
+  factory TransitionItemModel.fromJson(Map<String, dynamic> json) {
+    print(json['transactionStatus']);
+    return TransitionItemModel(
+        transactionID: StringHelpers.convertToString(json['txid']),
+        date: StringHelpers.convertToString(json['time']),
+        amount: StringHelpers.convertToString(json['amount']),
+        confirmations: json['confirmations'] ?? false,
+        transactionStatus: json['transactionStatus'],
+        transactionFee: StringHelpers.convertToString(json['feeAmount']),
+        transactionType: StringHelpers.convertToString(json['feeUnit']),
+        fromToAddress: StringHelpers.convertToString(json['secondAddress']));
+  }
+}
+
+class TransitionRequest {
+  String address;
+  String transactionId;
+  String page;
+  // int? pageNumber;
+  TransitionRequest(
+      {this.transactionId = '', this.address = '', this.page = ''});
+
+  Map<String, dynamic> toJson() {
+    Map<String, dynamic> map = <String, dynamic>{
+      'address': address,
+      'transactionId': transactionId,
+      'page': page,
+    };
+    return map;
+  }
+}
+
+Future<Abc> getTransactionsServices(TransitionRequest transitionRequest) async {
+  Uri url = Uri.parse("${apiUrl}wallet/get-btc-transactions");
+  print('arr---$url');
+  Map<String, String> headers = await auth.authorizationToken();
+  final Map<String, dynamic> requestSendParams = transitionRequest.toJson();
+  print('arr--- requestSendParams $requestSendParams');
+  try {
+    final http.Response response = await client.post(
+      url,
+      body: requestSendParams,
+      headers: headers,
+    );
+
+    if (response.statusCode == 200) {
+      String content = response.body;
+      dynamic arr = json.decode(content);
+      print('arr---$arr');
+      Map<String, dynamic> rest = arr['payload'];
+      return Abc.fromJson(rest);
+    } else {
+      throw Exception('Failed to load data !');
+    }
+  } catch (e) {
+    print('arr---ee$e');
+    throw Exception('Failed to load data !');
+  }
+}
+
+
+
+
+  final String apiUrl = appSettings['api_url']!;
+
+
+
+//  provide
+
+
+MultiProvider(
+      providers: <SingleChildWidget>[
+        ChangeNotifierProvider(
+          create: (_) => AuthProvider(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => WalletProvider(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => BitcoinWalletProvider(),
+        ),
+      ],
+      child:
+
+
+
+
+       Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (BuildContext context) => MultiProvider(
+              providers: <SingleChildWidget>[
+                ChangeNotifierProvider<ReceivedProvider>(
+                  create: (_) => ReceivedProvider(),
+                ),
+              ],
+              child: WalletScannerScreen(),
+            ),
+          ));

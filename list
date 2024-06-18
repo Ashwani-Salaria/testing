@@ -1,0 +1,268 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
+import 'package:provider/provider.dart';
+
+
+class TransitionsBitcoinWidgetScreen extends StatefulWidget {
+  static const String routeName = '/report';
+
+  final ScrollController scrollController = ScrollController();
+
+  TransitionsBitcoinWidgetScreen({Key? key}) : super(key: key);
+
+  @override
+  _TransitionsBitcoinWidgetScreenState createState() =>
+      _TransitionsBitcoinWidgetScreenState();
+}
+
+final ScrollController _scrollController = ScrollController();
+
+class _TransitionsBitcoinWidgetScreenState
+    extends State<TransitionsBitcoinWidgetScreen> {
+  late TransitionRequest transitionRequest = TransitionRequest();
+  late TransitionProvider _transitionModel;
+  late BitcoinWalletProvider _bitcoinWalletProvider;
+  late AuthProvider authModel;
+
+  @override
+  void initState() {
+    authModel = Provider.of<AuthProvider>(context, listen: false);
+
+    _transitionModel = Provider.of<TransitionProvider>(context, listen: false);
+    _bitcoinWalletProvider =
+        Provider.of<BitcoinWalletProvider>(context, listen: false);
+
+    _getPageData();
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
+  Future<void> _getPageData() async {
+    print('_getPageData_getPageData_getPageData=====');
+    transitionRequest.address =
+        _bitcoinWalletProvider.walletBdkInfoClass.address;
+
+    await _transitionModel.getList(transitionRequest: transitionRequest);
+  }
+
+  void onListingScrollDown(BuildContext context) {
+    final ScrollController scr = PrimaryScrollController.of(context);
+    scr.addListener(() {
+      if (scr.position.pixels == scr.position.maxScrollExtent &&
+          _transitionModel.lodeSeeMore == false) {
+        _getPageData();
+
+        _transitionModel.loadMoreFun(transitionRequest);
+      } else {
+        _getPageData();
+      }
+    });
+  }
+
+  void _scrollToBottom() {
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(_scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.elasticOut);
+    } else {
+      Timer(const Duration(milliseconds: 400), () => _scrollToBottom());
+    }
+  }
+
+  Widget pageRecordListingWidget() {
+    return Expanded(
+      child: Builder(
+        builder: (BuildContext context) {
+          // onListingScrollDown(context);
+          return ListView.builder(
+            itemCount: _transitionModel.records!.length,
+            itemBuilder: (BuildContext context, int index) {
+              return Column(children: <Widget>[
+                listWidget(index),
+                loadMoreIndicatorWidget(index)
+              ]);
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget loadMoreIndicatorWidget(int index) {
+    if (_transitionModel.lodeSeeMore == true &&
+        (index == _transitionModel.records!.length - 1)) {
+      return CircularProgressIndicator();
+    } else {
+      return const SizedBox.shrink();
+    }
+  }
+
+  Widget pageWidget() {
+    return Consumer<TransitionProvider>(
+      builder: (BuildContext ctx, TransitionProvider transitionModel, _) =>
+          Scaffold(
+              backgroundColor: StylesColors.whiteColor, body: bodyWidget()),
+    );
+  }
+
+  Widget bodyWidget() {
+    return RefreshIndicator(
+      onRefresh: () {
+        return Future.delayed(
+          const Duration(seconds: 1),
+          () {
+            _getPageData();
+          },
+        );
+      },
+      child: Stack(
+        children: [
+          Column(
+            children: <Widget>[
+              if (!_transitionModel.loading)
+                Center(
+                    child: Container(
+                        padding: EdgeInsets.only(top: 20),
+                        child: CircularProgressIndicator()))
+              else if (_transitionModel.records != null &&
+                  _transitionModel.records!.isNotEmpty)
+                pageRecordListingWidget()
+              else
+                noResultFound(
+                    backGroundColor: StylesColors.transparentColor,
+                    context: context,
+                    isLogoShow: false),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget listWidget(int index) {
+    TransitionItemModel transitionItemModelObj =
+        _transitionModel.records![index];
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChangeNotifierProvider<TransitionProvider>(
+              create: (BuildContext context) {
+                return TransitionProvider();
+              },
+              child: TransactionDetailScreen(
+                  transactionId: transitionItemModelObj.transactionID),
+            ),
+          ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(top: 20, left: 15, right: 15),
+        child: Row(
+          children: [
+            Container(
+              child: Image.asset(
+                (transitionItemModelObj.transactionStatus == 'S')
+                    ? 'assets/images/icon/send_icon.png'
+                    : 'assets/images/icon/receive_icon.png',
+                height: SizeHelpers.getImageHeight('M'),
+              ),
+            ),
+            // UserAvatarWidget(
+            //     size: 'L',
+            //     imageUrl: MediaHelpers.getMediaUrl(
+            //       mediaName: authModel.loginFromJsonObj != null
+            //           ? authModel.loginFromJsonObj!.userImage.toString()
+            //           : '',
+            //       mediaUUID: authModel.loginFromJsonObj != null
+            //           ? authModel.loginFromJsonObj!.userUuid.toString()
+            //           : '',
+            //     )),
+            Column(
+              mainAxisAlignment: MainAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: MediaQuery.of(context).size.width - 80,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        margin: const EdgeInsets.only(left: 10, top: 0),
+                        child: HeaderTextWidget(
+                          title:
+                              (transitionItemModelObj.transactionStatus == 'S')
+                                  ? 'Send'
+                                  : 'Receive',
+                        ),
+                      ),
+                      amountWidget(index),
+                    ],
+                  ),
+                ),
+                Container(
+                    margin: const EdgeInsets.only(left: 10),
+                    child: Text(
+                      transitionItemModelObj.confirmations
+                          ? DateTimeHelpers.convertUnixDateTime(
+                              dateTime: transitionItemModelObj.date)
+                          : 'Pending',
+                      style: const TextStyle(
+                          color: StylesColors.versionColor,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          decoration: TextDecoration.none),
+                    ))
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget amountWidget(int index) {
+    TransitionItemModel transitionItemModelObj =
+        _transitionModel.records![index];
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(
+          (transitionItemModelObj.transactionStatus == 'S') ? '-' : '+',
+          style: TextStyle(
+              color: (transitionItemModelObj.transactionStatus == 'S')
+                  ? StylesColors.redColor
+                  : StylesColors.greenColor,
+              fontSize: 22),
+        ),
+        Container(
+          padding: EdgeInsets.only(left: 2, right: 2),
+          child: Text(
+            transitionItemModelObj.amount,
+            style: const TextStyle(
+              color: StylesColors.blackColor,
+              fontSize: 16,
+              decoration: TextDecoration.none,
+            ),
+          ),
+        ),
+        Text(
+          'BTC',
+          style: TextStyle(color: StylesColors.blackLightColor6A, fontSize: 14),
+        )
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return pageWidget();
+  }
+}
